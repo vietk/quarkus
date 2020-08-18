@@ -75,6 +75,7 @@ import io.quarkus.resteasy.server.common.runtime.QuarkusResteasyDeployment;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceDefiningAnnotationBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodParamAnnotations;
+import io.quarkus.resteasy.server.common.spi.FriendlyJaxRsAnnotationPrefixBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.undertow.deployment.FilterBuildItem;
@@ -174,6 +175,7 @@ public class ResteasyServerCommonProcessor {
             List<AdditionalJaxRsResourceDefiningAnnotationBuildItem> additionalJaxRsResourceDefiningAnnotations,
             List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations,
             List<AdditionalJaxRsResourceMethodParamAnnotations> additionalJaxRsResourceMethodParamAnnotations,
+            List<FriendlyJaxRsAnnotationPrefixBuildItem> friendlyJaxRsAnnotationPrefixes,
             List<ResteasyDeploymentCustomizerBuildItem> deploymentCustomizers,
             JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
@@ -283,7 +285,8 @@ public class ResteasyServerCommonProcessor {
 
         // generate default constructors for suitable concrete @Path classes that don't have them
         // see https://issues.jboss.org/browse/RESTEASY-2183
-        generateDefaultConstructors(transformers, withoutDefaultCtor, additionalJaxRsResourceDefiningAnnotations);
+        generateDefaultConstructors(transformers, withoutDefaultCtor, additionalJaxRsResourceDefiningAnnotations,
+                friendlyJaxRsAnnotationPrefixes);
 
         checkParameterNames(beanArchiveIndexBuildItem.getIndex(), additionalJaxRsResourceMethodParamAnnotations);
 
@@ -385,6 +388,18 @@ public class ResteasyServerCommonProcessor {
             }
         }));
         resteasyDeployment.produce(new ResteasyDeploymentBuildItem(path, deployment));
+    }
+
+    @BuildStep
+    List<FriendlyJaxRsAnnotationPrefixBuildItem> registerCompatibleAnnotationPrefixes() {
+        List<FriendlyJaxRsAnnotationPrefixBuildItem> prefixes = new ArrayList<>();
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple(packageName(ResteasyDotNames.PATH))));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple("kotlin"))); // make sure the annotation that the Kotlin compiler adds don't interfere with creating a default constructor
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple("lombok"))); // same for lombok
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple("io.quarkus.security"))); // same for the security annotations
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple("javax.annotation.security")));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(DotName.createSimple("jakarta.annotation.security")));
+        return prefixes;
     }
 
     @BuildStep
@@ -579,15 +594,15 @@ public class ResteasyServerCommonProcessor {
 
     private static void generateDefaultConstructors(BuildProducer<BytecodeTransformerBuildItem> transformers,
             Map<DotName, ClassInfo> withoutDefaultCtor,
-            List<AdditionalJaxRsResourceDefiningAnnotationBuildItem> additionalJaxRsResourceDefiningAnnotations) {
+            List<AdditionalJaxRsResourceDefiningAnnotationBuildItem> additionalJaxRsResourceDefiningAnnotations,
+            List<FriendlyJaxRsAnnotationPrefixBuildItem> friendlyJaxRsAnnotationPrefixes) {
 
         final Set<String> allowedAnnotationPrefixes = new HashSet<>(1 + additionalJaxRsResourceDefiningAnnotations.size());
-        allowedAnnotationPrefixes.add(packageName(ResteasyDotNames.PATH));
-        allowedAnnotationPrefixes.add("kotlin"); // make sure the annotation that the Kotlin compiler adds don't interfere with creating a default constructor
-        allowedAnnotationPrefixes.add("lombok"); // same for lombok
-        allowedAnnotationPrefixes.add("io.quarkus.security"); // same for the security annotations
-        allowedAnnotationPrefixes.add("javax.annotation.security");
-        allowedAnnotationPrefixes.add("jakarta.annotation.security");
+
+        friendlyJaxRsAnnotationPrefixes.stream()
+                .map(prefix -> prefix.getAnnotationClass().toString())
+                .forEachOrdered(allowedAnnotationPrefixes::add);
+
         for (AdditionalJaxRsResourceDefiningAnnotationBuildItem additionalJaxRsResourceDefiningAnnotation : additionalJaxRsResourceDefiningAnnotations) {
             final String packageName = packageName(additionalJaxRsResourceDefiningAnnotation.getAnnotationClass());
             if (packageName != null) {

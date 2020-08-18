@@ -51,6 +51,7 @@ import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
+import io.quarkus.resteasy.server.common.spi.FriendlyJaxRsAnnotationPrefixBuildItem;
 import io.quarkus.resteasy.server.common.spi.ResteasyJaxrsConfigBuildItem;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.smallrye.openapi.common.deployment.SmallRyeOpenApiConfig;
@@ -157,6 +158,22 @@ public class SmallRyeOpenApiProcessor {
                 new FilteredIndexView(
                         compositeIndex,
                         new OpenApiConfigImpl(ConfigProvider.getConfig())));
+    }
+
+    @BuildStep
+    public List<FriendlyJaxRsAnnotationPrefixBuildItem> registerJaxRsSupportedAnnotation() {
+        List<FriendlyJaxRsAnnotationPrefixBuildItem> prefixes = new ArrayList<>();
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(
+                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.tags")));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(
+                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.servers")));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(
+                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.security")));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(
+                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.media")));
+        prefixes.add(new FriendlyJaxRsAnnotationPrefixBuildItem(
+                DotName.createSimple("org.eclipse.microprofile.openapi.annotations.extensions")));
+        return prefixes;
     }
 
     @BuildStep
